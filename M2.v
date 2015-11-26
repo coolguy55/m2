@@ -40,12 +40,13 @@ module M2 (
 M2_state_type top_state;
 
 logic [5:0] C_address_a,C_address_b;
-logic signed [15:0] C_write_a,C_write_b,C_read_a,C_read_b;
+logic signed [31:0] C_write_a,C_write_b;
+logic signed [31:0] C_read_a,C_read_b;
 
 logic signed C_wren_a,C_wren_b;
 
 logic [5:0] S_prime_address_a,S_prime_address_b;
-logic signed [15:0] S_prime_write_a,S_prime_write_b,S_prime_read_a,S_prime_read_b;
+logic signed [31:0] S_prime_write_a,S_prime_write_b,S_prime_read_a,S_prime_read_b;
 
 logic signed S_prime_wren_a,S_prime_wren_b;
 
@@ -155,8 +156,8 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 		M2_SRAM_we_n <= 1'b1;
 		C_wren_a<=1'd0;
 		C_wren_b<=1'd0;
-		C_write_a<=16'd0;
-		C_write_b<=16'd0;
+		C_write_a<=32'd0;
+		C_write_b<=32'd0;
 		C_address_a<=5'd0;
 		C_address_b<=5'd0;
 		write_c2<=1'd0;
@@ -395,10 +396,10 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 			C_address_b<=C_column_offset+C_row_offset+6'd8;
 			C_row_offset<=C_row_offset+6'd16;		
 		
-			mult_op_1 <= {16'd0,S_prime_read_a};
-			mult_op_2 <= {16'd0,C_read_a};
-			mult_op_3 <= {16'd0,S_prime_read_b};
-			mult_op_4 <= {16'd0,C_read_b};
+			mult_op_1 <= {S_prime_read_a};
+			mult_op_2 <= {C_read_a};
+			mult_op_3 <= {S_prime_read_b};
+			mult_op_4 <= {C_read_b};
 			
 			start_temp_write<=1'd1;		
 			
@@ -416,10 +417,10 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
       S_M2_15: begin
 			
 			temp<=temp+M2_mult_res_1+M2_mult_res_2;
-			mult_op_1 <= {16'd0,S_prime_read_a};
-			mult_op_2 <= {16'd0,C_read_a};
-			mult_op_3 <= {16'd0,S_prime_read_b};
-			mult_op_4 <= {16'd0,C_read_b};
+			mult_op_1 <= {S_prime_read_a};
+			mult_op_2 <= {C_read_a};
+			mult_op_3 <= {S_prime_read_b};
+			mult_op_4 <= {C_read_b};
 						
 			S_prime_address_a<=S_prime_row_offset + S_prime_column_offset;
 			S_prime_address_b<=S_prime_row_offset + S_prime_column_offset+6'd1;
@@ -456,10 +457,10 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 		
 		
 			temp<=temp+M2_mult_res_1+M2_mult_res_2;
-			mult_op_1 <= {16'd0,S_prime_read_a};
-			mult_op_2 <= {16'd0,C_read_a};
-			mult_op_3 <= {16'd0,S_prime_read_b};
-			mult_op_4 <= {16'd0,C_read_b};
+			mult_op_1 <= {S_prime_read_a};
+			mult_op_2 <= {C_read_a};
+			mult_op_3 <= {S_prime_read_b};
+			mult_op_4 <= {C_read_b};
 			
 			if(~C1_done) begin	
 				S_prime_address_a<=S_prime_row_offset+ S_prime_column_offset;
@@ -476,10 +477,10 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
       S_M2_17: begin
 		
 			temp<=temp+M2_mult_res_1+M2_mult_res_2;
-			mult_op_1 <= {16'd0,S_prime_read_a};
-			mult_op_2 <= {16'd0,C_read_a};
-			mult_op_3 <= {16'd0,S_prime_read_b};
-			mult_op_4 <= {16'd0,C_read_b};
+			mult_op_1 <= {S_prime_read_a};
+			mult_op_2 <= {C_read_a};
+			mult_op_3 <= {S_prime_read_b};
+			mult_op_4 <= {C_read_b};
 			
 			if(C1_done)
 				top_state<=S_M2_18;
@@ -611,9 +612,9 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 			temp_row_offset <= temp_row_offset + 6'd16;
 			
 			mult_op_1 <= {temp_read_a};
-			mult_op_2 <= {16'd0,C_read_a};
+			mult_op_2 <= {C_read_a};
 			mult_op_3 <= {temp_read_b};
-			mult_op_4 <= {16'd0,C_read_b};	
+			mult_op_4 <= {C_read_b};	
 	
 			if (start_c2) begin
 				temp<=temp+M2_mult_res_1+M2_mult_res_2;
@@ -670,9 +671,9 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				
 				
 			mult_op_1 <= {temp_read_a};
-			mult_op_2 <= {16'd0,C_read_a};
+			mult_op_2 <= {C_read_a};
 			mult_op_3 <= {temp_read_b};
-			mult_op_4 <= {16'd0,C_read_b};	
+			mult_op_4 <= {C_read_b};	
 			
          top_state<=S_M2_23;
       end
@@ -696,9 +697,9 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;
 				
 				mult_op_1 <= {temp_read_a};
-				mult_op_2 <= {16'd0,C_read_a};
+				mult_op_2 <= {C_read_a};
 				mult_op_3 <= {temp_read_b};
-				mult_op_4 <= {16'd0,C_read_b};	
+				mult_op_4 <= {C_read_b};	
 				
 				C_row_offset <= C_row_offset + 6'd16;
 				temp_row_offset <= temp_row_offset + 6'd16;
@@ -744,9 +745,9 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;			
 			
 				mult_op_1 <= {temp_read_a};
-				mult_op_2 <= {16'd0,C_read_a};
+				mult_op_2 <= {C_read_a};
 				mult_op_3 <= {temp_read_b};
-				mult_op_4 <= {16'd0,C_read_b};	
+				mult_op_4 <= {C_read_b};	
 				top_state<=S_M2_21;		// loop back to 21
 			end	else if (c2_done && !last_c2_loop)begin
 				last_c2_loop <= 1'd1;
