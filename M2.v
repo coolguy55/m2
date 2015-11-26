@@ -1,5 +1,3 @@
-
-** CHANGES**
 /*
 Copyright by Pouya Taatizadeh
 Developed for the Digital Systems Design course (COE3DQ5)
