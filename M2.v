@@ -31,9 +31,9 @@ module M2 (
 	output logic [31:0] M2_mult_3_in1,
 	output logic [31:0] M2_mult_3_in2,
 
-	input logic [63:0] M2_mult_res_1,
-	input logic [63:0] M2_mult_res_2,
-	input logic [63:0] M2_mult_res_3
+	input logic signed [63:0] M2_mult_res_1,
+	input logic signed [63:0] M2_mult_res_2,
+	input logic signed [63:0] M2_mult_res_3
 );
 
 
