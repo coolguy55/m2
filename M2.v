@@ -407,7 +407,7 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				temp_address<=temp_address+6'd1;
 				temp_write_a<= temp_c1[23:8];
 				temp_wren_a <= 1'd1;
-
+				temp <= 64'd0;
 			end
 			
 			top_state<=S_M2_15;
@@ -628,28 +628,31 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 			
 			temp<=temp+M2_mult_res_1+M2_mult_res_2;
 		
-			if(C_column_offset == 6'd7 && C_row_offset == 6'd48) begin		// either go to next temp, or done (next c, same temp)
+			if(temp_column_offset == 6'd7 && temp_row_offset == 6'd48) begin		// either go to next temp, or done (next temp, same c)
 			
-				if(temp_row_offset==6'd56 && temp_column_offset==6'd6) begin	// done all c and temp
+				if(C_row_offset==6'd56 && C_column_offset==6'd6) begin	// done all c and temp
 					// done C2 for this block
-					C_row_offset<=6'd0;
-					C_column_offset<=6'd0;
-					
+					temp_row_offset<=6'd0;
+					temp_column_offset<=6'd0;
+					c2_done <= 1'd1;
 					
 				end else begin		
-					// move to a different column in temp block
-					C_row_offset<=6'd0;
-					C_column_offset<=6'd0;
+					// move to a different column in c block
+					temp_row_offset<=6'd0;
+					temp_column_offset<=6'd0;
 					
-					temp_row_offset <= 6'd0;
-					temp_column_offset <= temp_column_offset + 6'd1;
+					C_row_offset <= 6'd0;
+					C_column_offset <= C_column_offset + 6'd1;
 							
 				end
 					
-			end else begin	// C is not done, go to next c column. keep temp same.
+			end else begin	// temp is not done, go to next temp column. keep c same.
 			
-				C_column_offset<=C_column_offset+6'd1;
-				C_row_offset<=6'd0;
+				temp_column_offset <= temp_column_offset + 6'd1;
+				temp_row_offset <= temp_row_offset + 6'd16;
+				
+				C_row_offset <= C_row_offset + 6'd16;
+				
 			
 			end
 		
@@ -679,9 +682,10 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 			block_row_address <= mult_res_3;							// row * 2560
 			mult_op_5 <= 32'd8;
 			mult_op_6 <= block_column_offset;
-			
+						
 			temp<=temp+M2_mult_res_1+M2_mult_res_2;
-
+			
+			
  			if (yuv_col == 18'd3 && yuv_row == 18'd1120) begin		// Done this block, can go back to c1
 				c2_done <= 1'd1;
 			end else if (!c2_done) begin	// no more multiplications, just do the last write for this block
@@ -695,11 +699,16 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				mult_op_2 <= {16'd0,C_read_a};
 				mult_op_3 <= {temp_read_b};
 				mult_op_4 <= {16'd0,C_read_b};	
+				
+				C_row_offset <= C_row_offset + 6'd16;
+				temp_row_offset <= temp_row_offset + 6'd16;
+				
 			end
 			if (write_c2) begin	// Write Y01
 				M2_SRAM_we_n <= 1'd0;	// Write for sram
 				M2_SRAM_write_data <= {temp_c2_clipped_even, temp_c2_clipped_odd};
 				M2_SRAM_address <= prev_block_row_address + prev_block_column_address + yuv_row + yuv_col;
+				temp <= 64'd0;		// temp back to zero
 				if (yuv_col == 18'd3) begin
 					yuv_row <= yuv_row + 18'd160;
 					yuv_col <= 18'd0;
