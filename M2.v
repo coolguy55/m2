@@ -122,7 +122,6 @@ logic start_write,start_temp_write,C1_done,c2_done;
 
 logic[5:0] temp_column_offset,temp_row_offset, c2_write_count;
 
-logic writing_Y;
 
 /// multipliers signal in M2 ///////////////////////////////////////////
 
@@ -179,8 +178,6 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 		
 		C_column_offset<=6'd0;
 		C_row_offset<=6'd0;
-		
-		writing_Y<=1'd1;
 		
 		inner_column_offset<=18'd0;
 		inner_row_offset<=18'd0;
@@ -390,10 +387,6 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 		S_M2_12: begin
 		
 			M2_SRAM_we_n <= 1'd1;
-			inner_column_offset<=18'd0;
-			inner_row_offset<=18'd0;
-			yuv_col<=18'd0;
-			yuv_row<=18'd0;
 			S_prime_address_a<=S_prime_row_offset+ S_prime_column_offset;
 			S_prime_wren_a<=1'd0;
 			
@@ -538,7 +531,7 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				
       end
 
-        S_M2_18: begin
+      S_M2_18: begin
 			
 			temp_address_a<=temp_address;	// Last write for C1
 			temp_address<=temp_address+6'd1;
@@ -550,189 +543,186 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 			C_wren_a<=1'd0;			
 			temp_column_offset <= 6'd0;
 			temp_row_offset <= 6'd0;	
-			C1_done<=1'd0;
-	
-		// we initialize the block values to start the FETCHING so must check here if we need same block row or next block row.
-		if(block_column_offset==16'd39) begin
-			block_row_offset<= block_row_offset+18'd1;
-			block_column_offset<=18'd0;
-		end else begin
-			block_column_offset<=block_column_offset+ 18'd1;
-		end
-		
-		// since the above update happens next cycle , use presetn values to calculate the WRITE addresses
-		mult_op_1<=block_row_offset;
-		mult_op_2<=32'd2560;
-		mult_op_3<= block_column_offset;
-		mult_op_4<=32'd8;	
-			
-		c2_done<=1'd0;
+
          top_state<=S_M2_19;
       end
-	  
-	  S_M2_19: begin
-	  //Matrix Multiplication is column times column
-		C_address_a<=C_column_offset+C_row_offset;  
-		C_address_b<=C_column_offset+C_row_offset+6'd8;
-		C_row_offset<=C_row_offset+6'd16;
-		C_wren_a<=1'd0;
-		C_wren_b<=1'd0;
-		
-		temp_address_a <= temp_column_offset + temp_row_offset;
-		temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
-		temp_row_offset <= temp_row_offset + 6'd16;
-		temp_wren_a <= 1'd0;
-		temp_wren_b <= 1'd0;
-		
-		S_prime_row_offset <= 6'd0;
-		S_prime_column_offset <= 6'd0;
-		S_prime_address_a <= 6'd63;
-		
-		// assiging the addresss ofsets required to write to SRAM
-		prev_block_row_address<= mult_res_1>>1;
-		prev_block_column_address<= mult_res_2>>1;
-		
-		// the addresses for the FETCHING are calcualted
-		mult_op_1<=block_row_offset;
-		mult_op_2<=32'd2560;
-		mult_op_3<= block_column_offset;
-		mult_op_4<=32'd8;	
-			
-		block_number_counter <= block_number_counter + 18'd1;
-		
-		
-		
-		top_state<=S_M2_20;
-		end
-      S_M2_20: begin
-		
-		block_row_address<=mult_res_1;
-		block_column_address<=mult_res_2;
 
-		if (block_number_counter == 18'd1200) begin
-			fetching_u_now <= 1'd1;
-		end
-		if(block_number_counter == 18'd1201)
-			writing_Y<=1'd0;
-		
-		C_address_a<=C_column_offset+C_row_offset; // Matrix Multiplication is column times column 
-		C_address_b<=C_column_offset+C_row_offset+6'd8;
-		C_row_offset<=C_row_offset+6'd16;
-		
-		temp_address_a <= temp_column_offset + temp_row_offset;
-		temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
-		temp_row_offset <= temp_row_offset + 6'd16;
-		
-		temp <= 64'd0;
-		
-		
-		top_state<=S_M2_21;
-		end
-      S_M2_21: begin
-	  
-	  // do the code for READING FROM SRAM
-	  if(~c2_done) begin
-			M2_SRAM_we_n <= 1'd1;	// Set reading for sram
-			S_prime_wren_a <= 1'd0; // stop writing the fetched value
-			M2_SRAM_address<=block_row_address+block_column_address+inner_column_offset+inner_row_offset + sram_fetch_offset;		// Fetch S8, then S9, .. S15. Then S328 etc
-			inner_column_offset<=inner_column_offset+18'd1;
-		
-			if (inner_column_offset == 16'd7 && inner_row_offset == 16'd2240) begin	
-				
-					if (block_column_offset < 16'd7) begin		// Go to the right block
-						block_column_offset <= block_column_offset + 16'd1;
-						block_row_offset <= 16'd0;
-						inner_column_offset <= 16'd0;
-						inner_row_offset <= 16'd0;
-					
-					end else if (block_column_offset == 16'd7) begin	// If at rightmost block
-						
-						if (block_row_offset < 16'd7) begin		// If not at bottom right, go down left
-							block_row_offset <= block_row_offset + 16'd1;
-							block_column_offset <= 16'd0;
-							inner_column_offset <= 16'd0;
-							inner_row_offset <= 16'd0;
-						
-						end else if (block_row_offset == 16'd7) begin	// at the bottom right (ie last block)
-							
-							// Finished m2					
-						end
-					
-					end
-			end else if (inner_column_offset == 16'd7 && fetching_u_now) begin
-					inner_row_offset <= inner_row_offset + 16'd160;
-					inner_column_offset <= 16'd0;
-			end else if (inner_column_offset == 16'd7 && ~fetching_u_now) begin
-					inner_row_offset <= inner_row_offset + 16'd320;
-					inner_column_offset <= 16'd0;			
-			end
-		
-			
-			//-------------------**********************-------------------
-			C_address_a<=C_column_offset+C_row_offset; // Matrix Multiplication is column times column 
+      S_M2_19: begin
+			temp_wren_a <= 1'd0;	// stop writing
+			block_column_offset <= block_column_offset + 16'd1;
+			C_address_a<=C_column_offset+C_row_offset;
 			C_address_b<=C_column_offset+C_row_offset+6'd8;
 			C_row_offset<=C_row_offset+6'd16;
 			
 			temp_address_a <= temp_column_offset + temp_row_offset;
 			temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
 			temp_row_offset <= temp_row_offset + 6'd16;
+			temp <= 16'd0;
 			
+			S_prime_row_offset <= 6'd0;
+			S_prime_column_offset <= 6'd0;
+			S_prime_address_a <= 6'd63;
 			
-		
-		end
-		mult_op_1 <= {temp_read_a};
-		mult_op_2 <= {C_read_a};
-		mult_op_3 <= {temp_read_b};
-		mult_op_4 <= {C_read_b};
-		temp<=64'd0;
-		
-		// start_c2 PREVENTS ANy writes the first time at C2 because we have no values yet
-		if(start_c2) begin
-			//temp<=mult_res_1+mult_res_2 ; // we start temp here because the result here
-			if(write_c2) begin // allow for one more loop through C2 to have Y0 and Y1 
-				temp_c2_clipped_odd <= temp_c1[63]? 8'd0:(|temp_c1[62:24] ? 8'd255:temp_c1[23:16]);	// Clipping Y1
-				temp_odd_assigned<=1'd1;
-			end else begin
-				temp_c2_clipped_even <= temp_c1[63]? 8'd0:(|temp_c1[62:24] ? 8'd255:temp_c1[23:16]);	// Clipping Y0
-				write_c2<=1'd1;
+			mult_op_5 <= 32'd2560;
+			mult_op_6 <= block_row_offset;
+			c2_done <= 1'd0;
+			C1_done <= 1'd0;
+			last_c2_loop <= 1'd0;
+			yuv_row <= 18'd0;
+			start_c2 <= 1'd0;
+			c2_write_count <= 6'd0;
+			temp_addr_buff1 <= 6'd0;
+			temp_addr_buff2 <= 6'd0;
+			c_addr_buff1 <= 6'd0;
+			c_addr_buff2 <= 6'd0;
+			
+         top_state<=S_M2_intermediate;
+      end
+		S_M2_intermediate: begin
+			if(block_column_offset==16'd40 && current_yuv == 2'd0) begin
+				block_column_offset<=16'd0;
+				block_row_offset<= block_row_offset+16'd1;
+				mult_op_6 <= block_row_offset+16'd1;
+			end else if (block_column_offset==16'd20 && current_yuv == 2'd1) begin		// u
+				block_column_offset<=16'd0;
+				block_row_offset<= block_row_offset+16'd1;
+				mult_op_6 <= block_row_offset+16'd1;			
 			end
-		end else begin
-			start_c2<=1'd1;
+			block_number_counter <= block_number_counter + 18'd1;
+		
+			top_state<=S_M2_20;
 		end
+      S_M2_20: begin
+			if (block_number_counter == 18'd1200) begin
+				fetching_u_now <= 1'd1;
+			end
+			block_row_address <= mult_res_3;							// row * 2560
+			block_column_address <= block_column_offset << 3;		// column * 8
 		
+			prev_block_column_address <= block_column_address >> 1;
+			prev_block_row_address <= block_row_address >> 1;
+		
+			C_address_a<=C_column_offset+C_row_offset;
+			C_address_b<=C_column_offset+C_row_offset+6'd8;
+			C_row_offset<=C_row_offset+6'd16;
 			
+			inner_column_offset <= 16'd0;
+			inner_row_offset <= 16'd0;
+			temp_address_a <= temp_column_offset + temp_row_offset;
+			temp_wren_a <= 1'd0;	// Read
+
+			
+			temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
+			temp_row_offset <= temp_row_offset + 6'd16;
+			
+			write_c2 <= 1'd0;	// Don't write in the first c2 loop
 		
 		
-		top_state<=S_M2_22;
-		end
-		
-	  S_M2_22: begin
-		M2_SRAM_we_n <= 1'd1;
-		C_address_a<=C_column_offset+C_row_offset; // Matrix Multiplication is column times column 
-		C_address_b<=C_column_offset+C_row_offset+6'd8;
-		C_row_offset<=C_row_offset+6'd16;
-		
-		temp_address_a <= temp_column_offset + temp_row_offset;
-		temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
-		temp_row_offset <= temp_row_offset + 6'd16;
-		
-		mult_op_1 <= {temp_read_a};
-		mult_op_2 <= {C_read_a};
-		mult_op_3 <= {temp_read_b};
-		mult_op_4 <= {C_read_b};
-		
-		temp<=temp+mult_res_1+mult_res_2 ;
-		
-		if(temp_column_offset == 6'd7 && temp_row_offset == 6'd48) begin		// either go to next temp, or done (next temp, same c)
+         top_state<=S_M2_21;
+      end
+
+      S_M2_21: begin
+			M2_SRAM_we_n <= 1'd1;	// Set reading for sram
+			S_prime_wren_a <= 1'd0; // stop writing the fetched value
+			M2_SRAM_address<=block_row_address+block_column_address+inner_column_offset+inner_row_offset + sram_fetch_offset;		// Fetch S8, then S9, .. S15. Then S328 etc
+			inner_column_offset<=inner_column_offset+16'd1;
+			
+
+			
+			if (inner_column_offset == 16'd7 && inner_row_offset == 16'd2560) begin	
+				c2_done <= 1'd1;
+				
+				if (block_column_offset < 16'd7) begin		// Go to the right block
+					block_column_offset <= block_column_offset + 16'd1;
+					block_row_offset <= 16'd0;
+					inner_column_offset <= 16'd0;
+					inner_row_offset <= 16'd0;
+				
+				end else if (block_column_offset == 16'd7) begin	// If at rightmost block
+					
+					if (block_row_offset < 16'd7) begin		// If not at bottom right, go down left
+						block_row_offset <= block_row_offset + 16'd1;
+						block_column_offset <= 16'd0;
+						inner_column_offset <= 16'd0;
+						inner_row_offset <= 16'd0;
+					
+					end else if (block_row_offset == 16'd7) begin	// at the bottom right (ie last block)
+						
+						// Finished m2					
+					end
+				
+				end
+			end else if (inner_column_offset == 16'd7 && fetching_u_now) begin
+				inner_row_offset <= inner_row_offset + 16'd160;
+				inner_column_offset <= 16'd0;
+			end else if (inner_column_offset == 16'd7 && ~fetching_u_now) begin
+				inner_row_offset <= inner_row_offset + 16'd320;
+				inner_column_offset <= 16'd0;			
+			end
 			
 			
-			// if we the value we sent to the C_address is 55 then we just read the last set of values for C2 . Set C2 high and in states 23,24 we dont do any reads only multiply.
-			// after c2_done --> state 22 , 23 , 24 , 21 (assign the value to temp_odd) , 22 (write and go back to state 12 or end.)
-				if(C_row_offset==6'd48 && C_column_offset==6'd7) begin	// done all c and temp
+						
+			C_address_a<=C_column_offset+C_row_offset;
+			C_address_b<=C_column_offset+C_row_offset+6'd8;
+			C_row_offset<=C_row_offset+6'd16;
+			
+			temp_address_a <= temp_column_offset + temp_row_offset;
+			temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
+			temp_row_offset <= temp_row_offset + 6'd16;
+			if (c2_write_count == 6'd31 && current_yuv == 2'd0) begin
+				temp_addr_buff1 <= temp_column_offset + temp_row_offset;
+				temp_addr_buff2 <= temp_column_offset + temp_row_offset + 6'd8;	
+				c_addr_buff1 <= C_column_offset+C_row_offset;
+				c_addr_buff2 <= C_column_offset+C_row_offset+6'd8;
+			end else if (c2_write_count == 6'd15 && current_yuv == 2'd1) begin
+				temp_addr_buff1 <= temp_column_offset + temp_row_offset;
+				temp_addr_buff2 <= temp_column_offset + temp_row_offset + 6'd8;	
+				c_addr_buff1 <= C_column_offset+C_row_offset;
+				c_addr_buff2 <= C_column_offset+C_row_offset+6'd8;			
+			end
+			
+			mult_op_1 <= {temp_read_a};
+			mult_op_2 <= {C_read_a};
+			mult_op_3 <= {temp_read_b};
+			mult_op_4 <= {C_read_b};	
+	
+			if (start_c2) begin
+				temp<=temp+M2_mult_res_1+M2_mult_res_2;
+				if (write_c2) begin
+					temp_c2_clipped_odd <= temp_c1[63]? 8'd0:(|temp_c1[62:24] ? 8'd255:temp_c1[23:16]);	// Clipping Y1
+					temp_odd_assigned<=1'd1;
+				end else begin
+					temp_c2_clipped_even <= temp_c1[63]? 8'd0:(|temp_c1[62:24] ? 8'd255:temp_c1[23:16]);	// Clipping Y0
+					write_c2 <= 1'd1;
+		
+				
+				end
+			temp<=64'd0;
+			end else 
+				start_c2 <= 1'd1;
+			
+//			if(start_c2)
+//				write_c2 <= ~write_c2;
+				
+			
+         top_state<=S_M2_22;
+      end
+		
+		
+		
+
+      S_M2_22: begin
+			mult_op_5 <= 32'd2560;
+			mult_op_6 <= block_row_offset;
+			
+			temp<=temp+M2_mult_res_1+M2_mult_res_2;
+		
+			if(temp_column_offset == 6'd7 && temp_row_offset == 6'd48) begin		// either go to next temp, or done (next temp, same c)
+			
+				if(C_row_offset==6'd56 && C_column_offset==6'd6) begin	// done all c and temp
 					// done C2 for this block
 					temp_row_offset<=6'd0;
 					temp_column_offset<=6'd0;
-					
 					c2_done <= 1'd1;
 					
 				end else begin		
@@ -741,111 +731,368 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 					temp_column_offset<=6'd0;
 					
 					C_row_offset <= 6'd0;
-					C_column_offset <= C_column_offset + 6'd1;		
+					C_column_offset <= C_column_offset + 6'd1;
+							
 				end
-		end else begin	// temp is not done, go to next temp column. keep c same.
+					
+			end else begin	// temp is not done, go to next temp column. keep c same.
 			
 				temp_column_offset <= temp_column_offset + 6'd1;
-				temp_row_offset <= 6'd0;
+				temp_row_offset <= temp_row_offset + 6'd16;
+				
+				C_row_offset <= C_row_offset + 6'd16;
+				
 			
-				C_row_offset <= 6'd0;
-		end
-		
-		// do the writing
-		if(temp_odd_assigned && start_c2 && write_c2) begin
-			
-			M2_SRAM_we_n <= 1'd0;	// Write for sram
-			M2_SRAM_write_data <= {temp_c2_clipped_even, temp_c2_clipped_odd};
-			M2_SRAM_address <= prev_block_row_address + prev_block_column_address + yuv_row + yuv_col;
-			temp_odd_assigned<=1'd0;
-			write_c2<=1'd0;
-			
-			/* check for 
-			1. If the SRAM address has written to final Y block we have to hcange the offsets we write to using the writing_Y flag
-			2. If the SRAN address has written to the final address we exit
-			3. If C2 is done then after the write we go back to C1. 
-			4. To correctly fetch the right data when going from Y to UV data. We need to know we are writing the LAST Y blocks one C2 before.*/
-
-			if( (prev_block_row_address + prev_block_column_address + yuv_row + yuv_col)==18'd38399) begin // we have just finished the last Y value
-				writing_Y<=1'd0;
-			end else if ((prev_block_row_address + prev_block_column_address + yuv_row + yuv_col) == 18'd76799) begin
-				top_state<=S_M2_DONE;
-				M2_done <= 1'b1;
 			end
 			
-			if (yuv_col == 18'd3 && writing_Y) begin // for y
+			if (write_c2 && temp_odd_assigned) begin	// Write Y01
+				c2_write_count <= c2_write_count + 1;
+				if (c2_write_count == 6'd30 && current_yuv == 2'd0)
+					sram_address_to_write_next <= prev_block_row_address + prev_block_column_address + yuv_row + yuv_col + 18'd1;
+				else if (c2_write_count == 6'd14 && current_yuv == 2'd1)
+					sram_address_to_write_next <= prev_block_row_address + prev_block_column_address + yuv_row + yuv_col + 18'd1;
+				M2_SRAM_we_n <= 1'd0;	// Write for sram
+				M2_SRAM_write_data <= {temp_c2_clipped_even, temp_c2_clipped_odd};
+				M2_SRAM_address <= prev_block_row_address + prev_block_column_address + yuv_row + yuv_col;
+				if (prev_block_row_address + prev_block_column_address + yuv_row + yuv_col == 18'd76800) begin
+				         top_state<=S_M2_DONE;
+							M2_done <= 1'b1;
+				end
+				temp_odd_assigned<=1'd0;
+				write_c2 <= 1'd0;
+				//temp <= 64'd0;		// temp back to zero
+				if (yuv_col == 18'd3 && current_yuv == 1'd0) begin // for y
 					yuv_row <= yuv_row + 18'd160;
 					yuv_col <= 18'd0;
-				end else if (yuv_col == 18'd3 && ~writing_Y) begin		// for u
+				end else if (yuv_col == 18'd3 && current_yuv == 1'd1) begin		// for u
 					yuv_row <= yuv_row + 18'd80;
 					yuv_col <= 18'd0;				
 				end else begin
 					yuv_col <= yuv_col + 18'd1;
+				end
 			end
 			
 		
-		end
-		if(c2_done)
-			top_state<=S_M2_12;
-		else
-			top_state<=S_M2_23;
 		
-		end
-		
-	  S_M2_23: begin
-		M2_SRAM_we_n <= 1'd1;	// Stop writing for sram
-		
-		if(~c2_done) begin
-		C_address_a<=C_column_offset+C_row_offset; // Matrix Multiplication is column times column 
-		C_address_b<=C_column_offset+C_row_offset+6'd8;
-		C_row_offset<=C_row_offset+6'd16;
-		
-		temp_address_a <= temp_column_offset + temp_row_offset;
-		temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
-		temp_row_offset <= temp_row_offset + 6'd16;
-		end 
-		
-		mult_op_1 <= {temp_read_a};
-		mult_op_2 <= {C_read_a};
-		mult_op_3 <= {temp_read_b};
-		mult_op_4 <= {C_read_b};
-		
-		temp<=temp+M2_mult_res_1+M2_mult_res_2;
-		
-		top_state<=S_M2_24;
-		
-	   end
-	  S_M2_24: begin
-		
-		if(~c2_done) begin
-		C_address_a<=C_column_offset+C_row_offset; // Matrix Multiplication is column times column 
-		C_address_b<=C_column_offset+C_row_offset+6'd8;
-		C_row_offset<=C_row_offset+6'd16;
-		
-		temp_address_a <= temp_column_offset + temp_row_offset;
-		temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
-		temp_row_offset <= temp_row_offset + 6'd16;
-		end 
-		
-		mult_op_1 <= {temp_read_a};
-		mult_op_2 <= {C_read_a};
-		mult_op_3 <= {temp_read_b};
-		mult_op_4 <= {C_read_b};
-		
-		temp<=temp+M2_mult_res_1+M2_mult_res_2;
-		
-		
-		
+			C_address_a<=C_column_offset+C_row_offset;
+			C_address_b<=C_column_offset+C_row_offset+6'd8;
+			
+			temp_address_a <= temp_column_offset + temp_row_offset;
+			temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;	
+
+			C_row_offset <= C_row_offset + 6'd16;
+			temp_row_offset <= temp_row_offset + 6'd16;			
+				
+				
+			mult_op_1 <= {temp_read_a};
+			mult_op_2 <= {C_read_a};
+			mult_op_3 <= {temp_read_b};
+			mult_op_4 <= {C_read_b};	
+			if (prev_block_row_address + prev_block_column_address + yuv_row + yuv_col != 18'd76800) begin
+				top_state<=S_M2_23;
+			end else if (prev_block_row_address + prev_block_column_address + yuv_row + yuv_col == 18'd76800) begin
+				top_state<=S_M2_DONE;
+				M2_done <= 1'b1;
+			end
+      end
+
+      S_M2_23: begin
+			M2_SRAM_we_n <= 1'd1;
+			block_row_address <= mult_res_3;							// row * 2560
+			mult_op_5 <= 32'd8;
+			mult_op_6 <= block_column_offset;
+						
+			temp<=temp+M2_mult_res_1+M2_mult_res_2;
+			
+			
+ 			if (block_number_counter < 16'd1200 && yuv_col == 18'd3 && yuv_row == 18'd1120) begin		// Done this block, can go back to c1
+				c2_done <= 1'd1;
+			end else if (block_number_counter >= 16'd1200 && yuv_col == 18'd3 && yuv_row == 18'd560) begin	// for u
+				c2_done <= 1'd1;
+			
+			end else if(!c2_done) begin	// no more multiplications, just do the last write for this block
+				C_address_a<=C_column_offset+C_row_offset;
+				C_address_b<=C_column_offset+C_row_offset+6'd8;
+				
+				temp_address_a <= temp_column_offset + temp_row_offset;
+				temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;
+				
+				mult_op_1 <= {temp_read_a};
+				mult_op_2 <= {C_read_a};
+				mult_op_3 <= {temp_read_b};
+				mult_op_4 <= {C_read_b};	
+				
+				C_row_offset <= C_row_offset + 6'd16;
+				temp_row_offset <= temp_row_offset + 6'd16;
+				
+			end
+			
+			if (prev_block_row_address + prev_block_column_address + yuv_row + yuv_col == 18'd230399) begin
+				top_state<=S_M2_DONE;
+			end else begin
+				top_state<=S_M2_24;
+			end
+      end
+
+      S_M2_24: begin
+			//M2_SRAM_address<=block_row_address+block_column_address+inner_column_offset+inner_row_offset + sram_fetch_offset;		// Fetch S8, then S9, .. S15. Then S328 etc
+			block_column_address <= mult_res_3;
+			M2_SRAM_we_n <= 1'd1;	// Stop writing for sram
 		
 			// Write s'
-		S_prime_address_a<=S_prime_address_a+16'd1;
-		S_prime_wren_a <= 1'd1;
-		S_prime_write_a<={M2_SRAM_read_data[15] ? 16'hffff : 16'h0000, M2_SRAM_read_data};
-		
-		
-		top_state<=S_M2_21;
-		
+			S_prime_address_a<=S_prime_address_a+16'd1;
+			S_prime_wren_a <= 1'd1;
+			S_prime_write_a<={M2_SRAM_read_data[15] ? 16'hffff : 16'h0000, M2_SRAM_read_data};
+			
+			
+			temp<=temp+M2_mult_res_1+M2_mult_res_2;
+			if (block_number_counter == 18'd1200 && M2_SRAM_address == 18'd38399) begin
+				S_prime_wren_a <= 1'd0;
+				top_state <= S_M2_12;		// Now do c1 for u
+				inner_column_offset <= 16'd0; 
+				inner_row_offset <= 16'd0;
+				current_yuv <= 2'd1;		// 1 = doing u values now
+				C_column_offset <= 6'd0;
+				C_row_offset <= 6'd0;
+				yuv_row <= 18'd0;		// copied these 5 from below
+				yuv_col <= 18'd0;
+				temp_row_offset <= 6'd0;
+				temp_column_offset <= 6'd0;
+				start_temp_write <= 1'd0;				
+			end else if (!c2_done) begin
+			
+				C_address_a<=C_column_offset+C_row_offset;
+				C_address_b<=C_column_offset+C_row_offset+6'd8;
+
+				temp_address_a <= temp_column_offset + temp_row_offset;
+				temp_address_b <= temp_column_offset + temp_row_offset + 6'd8;			
+			
+				C_row_offset <= C_row_offset + 6'd16;
+				temp_row_offset <= temp_row_offset + 6'd16;
+			
+				mult_op_1 <= {temp_read_a};
+				mult_op_2 <= {C_read_a};
+				mult_op_3 <= {temp_read_b};
+				mult_op_4 <= {C_read_b};	
+				top_state<=S_M2_21;		// loop back to 21
+			end	else if (c2_done && !last_c2_loop)begin
+				last_c2_loop <= 1'd1;
+				top_state<=S_M2_21;
+			end else if (c2_done && last_c2_loop) begin
+				C_column_offset <= 6'd0;
+				C_row_offset <= 6'd0;
+				yuv_row <= 18'd0;
+				yuv_col <= 18'd0;
+				temp_row_offset <= 6'd0;
+				temp_column_offset <= 6'd0;
+				start_temp_write <= 1'd0;
+				if (current_yuv == 2'd1)
+					S_prime_wren_a <= 1'd0;
+				if (c2_write_count == 6'd31 && current_yuv == 2'd0) 
+					top_state<=S_M2_INT_1;
+				else if (c2_write_count <= 6'd15 && current_yuv == 2'd1)
+					top_state<=S_M2_INT_1;
+				else
+					top_state<=S_M2_12;
+			end 
+					// Write every 2nd loop
 		end
+		
+		S_M2_INT_1: begin	// just do multiplications and then the write. no need to fetch
+			temp_addr_even_buff1 <= temp_addr_buff1 - 6'd1;		// For odd - will do this later
+			temp_addr_even_buff2 <= temp_addr_buff2 - 6'd1;
+			c_addr_even_buff1 <= c_addr_buff1;
+			c_addr_even_buff2 <= c_addr_buff2;
+			
+			temp_address_a <= temp_addr_buff1;
+			temp_address_b <= temp_addr_buff2;
+			C_address_a <= c_addr_buff1;
+			C_address_b <= c_addr_buff2;
+			
+			temp_addr_buff1 <= temp_addr_buff1 + 6'd16;
+			temp_addr_buff2 <= temp_addr_buff2 + 6'd16;
+			c_addr_buff1 <= c_addr_buff1 + 6'd16;
+			c_addr_buff2 <= c_addr_buff2 + 6'd16;			
+			
+			temp_wren_a <= 1'd0;
+			temp_wren_b <= 1'd0;
+			C_wren_a <= 1'd0;
+			C_wren_b <= 1'd0;
+			top_state<=S_M2_INT_2;
+			temp<= 64'd0;
+			temp_c2_clipped_even <= 8'd0;
+			temp_c2_clipped_odd <= 8'd0;
+		end
+		
+		S_M2_INT_2: begin
+			temp_address_a <= temp_addr_buff1;
+			temp_address_b <= temp_addr_buff2;
+			C_address_a <= c_addr_buff1;
+			C_address_b <= c_addr_buff2;
+			
+			temp_addr_buff1 <= temp_addr_buff1 + 6'd16;
+			temp_addr_buff2 <= temp_addr_buff2 + 6'd16;
+			c_addr_buff1 <= c_addr_buff1 + 6'd16;
+			c_addr_buff2 <= c_addr_buff2 + 6'd16;			
+			
+			top_state<=S_M2_INT_3;			
+		end
+
+		S_M2_INT_3: begin		// got values from int_1
+			mult_op_1 <= temp_read_a;
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;
+			
+			temp_address_a <= temp_addr_buff1;
+			temp_address_b <= temp_addr_buff2;
+			C_address_a <= c_addr_buff1;
+			C_address_b <= c_addr_buff2;
+			
+			temp_addr_buff1 <= temp_addr_buff1 + 6'd16;
+			temp_addr_buff2 <= temp_addr_buff2 + 6'd16;
+			c_addr_buff1 <= c_addr_buff1 + 6'd16;
+			c_addr_buff2 <= c_addr_buff2 + 6'd16;			
+			
+			top_state<=S_M2_INT_4;			
+		end
+		S_M2_INT_4: begin		// values from int_2
+			temp <= mult_res_1 + mult_res_2 + temp;
+			
+			// last read for odd
+			temp_address_a <= temp_addr_buff1;
+			temp_address_b <= temp_addr_buff2;
+			C_address_a <= c_addr_buff1;
+			C_address_b <= c_addr_buff2;
+	
+			mult_op_1 <= temp_read_a;
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;
+			top_state<=S_M2_INT_5;	
+		end
+		S_M2_INT_5: begin // values from int_3
+			temp <= mult_res_1 + mult_res_2 + temp;
+			mult_op_1 <= temp_read_a;
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;
+
+				// Switch to reading for even		
+			temp_address_a <= temp_addr_even_buff1;
+			temp_address_b <= temp_addr_even_buff2;
+			C_address_a <= c_addr_even_buff1;
+			C_address_b <= c_addr_even_buff2;
+
+			temp_addr_even_buff1 <= temp_addr_even_buff1 + 6'd16;
+			temp_addr_even_buff2 <= temp_addr_even_buff2 + 6'd16;
+			c_addr_even_buff1 <= c_addr_even_buff1 + 6'd16;
+			c_addr_even_buff2 <= c_addr_even_buff2 + 6'd16;			
+	
+			top_state<=S_M2_INT_6;	
+		end
+		S_M2_INT_6: begin // values from int_4
+			temp <= mult_res_1 + mult_res_2 + temp;
+			mult_op_1 <= temp_read_a;
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;	
+			
+			temp_address_a <= temp_addr_even_buff1;
+			temp_address_b <= temp_addr_even_buff2;
+			C_address_a <= c_addr_even_buff1;
+			C_address_b <= c_addr_even_buff2;
+			
+			temp_addr_even_buff1 <= temp_addr_even_buff1 + 6'd16;
+			temp_addr_even_buff2 <= temp_addr_even_buff2 + 6'd16;
+			c_addr_even_buff1 <= c_addr_even_buff1 + 6'd16;
+			c_addr_even_buff2 <= c_addr_even_buff2 + 6'd16;		
+			
+			top_state<=S_M2_INT_7;				
+		end
+		S_M2_INT_7: begin			
+			temp <= mult_res_1 + mult_res_2 + temp;
+			
+			// first multiplication for even
+			mult_op_1 <= temp_read_a;
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;
+			
+			temp_address_a <= temp_addr_even_buff1;
+			temp_address_b <= temp_addr_even_buff2;
+			C_address_a <= c_addr_even_buff1;
+			C_address_b <= c_addr_even_buff2;
+		
+			temp_addr_even_buff1 <= temp_addr_even_buff1 + 6'd16;
+			temp_addr_even_buff2 <= temp_addr_even_buff2 + 6'd16;
+			c_addr_even_buff1 <= c_addr_even_buff1 + 6'd16;
+			c_addr_even_buff2 <= c_addr_even_buff2 + 6'd16;		
+			
+			top_state<=S_M2_INT_8;			
+		end	
+		S_M2_INT_8: begin		// 2nd mult
+			temp <= mult_res_1 + mult_res_2;
+		
+			mult_op_1 <= temp_read_a;
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;	
+	
+			temp_address_a <= temp_addr_even_buff1;
+			temp_address_b <= temp_addr_even_buff2;
+			C_address_a <= c_addr_even_buff1;
+			C_address_b <= c_addr_even_buff2;
+			
+			temp_c2_clipped_odd <= temp[63]? 8'd0:(|temp[62:24] ? 8'd255:temp[23:16]);
+			
+			top_state<=S_M2_INT_9;			
+		end		
+		
+		
+		S_M2_INT_9: begin
+			temp <= mult_res_1 + mult_res_2 + temp;	
+	
+			mult_op_1 <= temp_read_a;	// 3rd mult
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;
+			top_state<=S_M2_INT_10;			
+		end		
+		
+		S_M2_INT_10: begin
+			temp <= mult_res_1 + mult_res_2 + temp;	
+		
+			mult_op_1 <= temp_read_a;		// 4th mult
+			mult_op_2 <= C_read_a;
+			mult_op_3 <= temp_read_b;
+			mult_op_4 <= C_read_b;
+	
+		
+			top_state<=S_M2_INT_11;			
+		end		
+
+		S_M2_INT_11: begin
+	
+			temp <= mult_res_1 + mult_res_2 + temp;
+			top_state<=S_M2_INT_12;			
+		end		
+				
+		S_M2_INT_12: begin
+	
+			temp_c2_clipped_even <= temp[63]? 8'd0:(|temp[62:24] ? 8'd255:temp[23:16]);
+			top_state<=S_M2_INT_13;			
+		end	
+	
+	
+		S_M2_INT_13: begin
+	
+			M2_SRAM_address <= sram_address_to_write_next;
+			M2_SRAM_we_n<= 1'd0;	// for write
+			M2_SRAM_write_data <= {temp_c2_clipped_even, temp_c2_clipped_odd};
+			
+			top_state<=S_M2_12;		// c1 next block			
+		end		
 						
 	
 		S_M2_DONE: begin
