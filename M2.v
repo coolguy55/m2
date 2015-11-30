@@ -562,7 +562,6 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 			S_prime_row_offset <= 6'd0;
 			S_prime_column_offset <= 6'd0;
 			S_prime_address_a <= 6'd63;
-			
 			mult_op_5 <= 32'd2560;
 			mult_op_6 <= block_row_offset;
 			c2_done <= 1'd0;
@@ -674,7 +673,7 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				temp_addr_buff2 <= temp_column_offset + temp_row_offset + 6'd8;	
 				c_addr_buff1 <= C_column_offset+C_row_offset;
 				c_addr_buff2 <= C_column_offset+C_row_offset+6'd8;
-			end else if (c2_write_count == 6'd15 && current_yuv == 2'd1) begin
+			end else if (c2_write_count == 6'd31 && current_yuv == 2'd1) begin
 				temp_addr_buff1 <= temp_column_offset + temp_row_offset;
 				temp_addr_buff2 <= temp_column_offset + temp_row_offset + 6'd8;	
 				c_addr_buff1 <= C_column_offset+C_row_offset;
@@ -749,7 +748,7 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 				c2_write_count <= c2_write_count + 1;
 				if (c2_write_count == 6'd30 && current_yuv == 2'd0)
 					sram_address_to_write_next <= prev_block_row_address + prev_block_column_address + yuv_row + yuv_col + 18'd1;
-				else if (c2_write_count == 6'd14 && current_yuv == 2'd1)
+				else if (c2_write_count == 6'd30 && current_yuv == 2'd1)
 					sram_address_to_write_next <= prev_block_row_address + prev_block_column_address + yuv_row + yuv_col + 18'd1;
 				M2_SRAM_we_n <= 1'd0;	// Write for sram
 				M2_SRAM_write_data <= {temp_c2_clipped_even, temp_c2_clipped_odd};
@@ -890,7 +889,7 @@ always @(posedge CLOCK_50_I or negedge resetn) begin
 					S_prime_wren_a <= 1'd0;
 				if (c2_write_count == 6'd31 && current_yuv == 2'd0) 
 					top_state<=S_M2_INT_1;
-				else if (c2_write_count <= 6'd15 && current_yuv == 2'd1)
+				else if (c2_write_count == 6'd31 && current_yuv == 2'd1)
 					top_state<=S_M2_INT_1;
 				else
 					top_state<=S_M2_12;
